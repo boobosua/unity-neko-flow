@@ -3,36 +3,19 @@ using System.Collections.Generic;
 
 namespace NekoFlow
 {
-    public class StateMachine
+    public partial class StateMachine
     {
-        private class Transition
-        {
-            public IState To { get; }
-            public IPredicate Condition { get; }
-
-            public Transition(IState to, IPredicate condition)
-            {
-                To = to ?? throw new ArgumentNullException(nameof(to));
-                Condition = condition ?? throw new ArgumentNullException(nameof(condition));
-            }
-        }
-
         private IState _currentState;
-        private readonly Dictionary<Type, List<Transition>> _transitions = new();
-        private List<Transition> _currentTransitions = new();
-        private readonly List<Transition> _anyTransitions = new();
-
-        // Cached empty list to avoid allocations
-        private static readonly List<Transition> EmptyTransitions = new(0);
-
         public IState CurrentState => _currentState;
-        public bool IsRunning => _currentState != null;
+
+        private readonly Dictionary<Type, List<Transition>> _transitions = new();
+        private readonly List<Transition> _anyTransitions = new();
 
         public void Tick()
         {
             var transition = GetTransition();
             if (transition != null)
-                ChangeState(transition.To);
+                SetState(transition.To);
 
             _currentState?.OnTick();
         }
@@ -42,109 +25,59 @@ namespace NekoFlow
             _currentState?.OnFixedTick();
         }
 
-        public void Initialize(IState initialState)
+        public void LateTick()
         {
-            if (initialState == null) return;
-            if (_currentState != null) return; // Already initialized
-
-            _currentState = initialState;
-            UpdateCurrentTransitions();
-            _currentState.OnEnter();
+            _currentState?.OnLateTick();
         }
 
-        private void ChangeState(IState newState)
+        public void SetState(IState state)
         {
-            if (_currentState == newState) return;
+            if (state == _currentState)
+                return;
 
             _currentState?.OnExit();
-            _currentState = newState;
-            UpdateCurrentTransitions();
+            _currentState = state;
             _currentState?.OnEnter();
         }
 
-        private void UpdateCurrentTransitions()
+        public void AddTransition(IState from, IState to, Func<bool> predicate)
         {
-            if (_currentState != null && _transitions.TryGetValue(_currentState.GetType(), out var transitions))
-                _currentTransitions = transitions;
-            else
-                _currentTransitions = EmptyTransitions;
-        }
-
-        public void AddTransition(IState from, IState to, Func<bool> condition) =>
-            AddTransition(from, to, new FuncPredicate(condition));
-
-        public void AddTransition(IState from, IState to, IPredicate condition)
-        {
-            if (from == null || to == null || condition == null) return;
-
-            var fromType = from.GetType();
-            if (!_transitions.TryGetValue(fromType, out var transitions))
+            if (_transitions.TryGetValue(from.GetType(), out var transitions) == false)
             {
                 transitions = new List<Transition>();
-                _transitions[fromType] = transitions;
+                _transitions[from.GetType()] = transitions;
             }
 
-            transitions.Add(new Transition(to, condition));
+            transitions.Add(new Transition(to, predicate));
         }
 
-        public void AddAnyTransition(IState to, Func<bool> condition) =>
-            AddAnyTransition(to, new FuncPredicate(condition));
-
-        public void AddAnyTransition(IState to, IPredicate condition)
+        public void AddAnyTransition(IState state, Func<bool> predicate)
         {
-            if (to == null || condition == null) return;
-            _anyTransitions.Add(new Transition(to, condition));
+            _anyTransitions.Add(new Transition(state, predicate));
         }
 
         private Transition GetTransition()
         {
-            // Any transitions have priority.
-            foreach (var transition in _anyTransitions)
+            for (int i = 0; i < _anyTransitions.Count; i++)
             {
-                if (transition.Condition.Evaluate())
-                    return transition;
+                if (_anyTransitions[i].Condition())
+                {
+                    return _anyTransitions[i];
+                }
             }
 
-            // Current state transitions.
-            foreach (var transition in _currentTransitions)
+            if (_currentState != null && _transitions.TryGetValue(_currentState.GetType(), out var currentTransitions))
             {
-                if (transition.Condition.Evaluate())
-                    return transition;
+                for (int i = 0; i < currentTransitions.Count; i++)
+                {
+                    if (currentTransitions[i].Condition())
+                    {
+                        return currentTransitions[i];
+                    }
+                }
             }
 
             return null;
-        }
-
-        public void RemoveTransitions(IState from)
-        {
-            if (from != null)
-                _transitions.Remove(from.GetType());
-        }
-
-        public void RemoveAnyTransition(IState to)
-        {
-            if (to == null) return;
-            for (int i = _anyTransitions.Count - 1; i >= 0; i--)
-            {
-                if (_anyTransitions[i].To == to)
-                    _anyTransitions.RemoveAt(i);
-            }
-        }
-
-        public void Stop()
-        {
-            if (_currentState == null) return;
-
-            _currentState.OnExit();
-            _currentState = null;
-            _currentTransitions = EmptyTransitions;
-        }
-
-        public void Dispose()
-        {
-            Stop();
-            _transitions.Clear();
-            _anyTransitions.Clear();
         }
     }
 }

@@ -4,9 +4,9 @@ namespace NekoFlow
 {
     public static class StateMachineExtensions
     {
-        public static StateMachine With(this StateMachine stateMachine, IState state)
+        public static StateMachine Begin(this StateMachine stateMachine, IState state)
         {
-            stateMachine.Initialize(state);
+            stateMachine.SetState(state);
             return stateMachine;
         }
 

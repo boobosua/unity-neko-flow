@@ -5,6 +5,7 @@ namespace NekoFlow
         void OnEnter();
         void OnTick();
         void OnFixedTick();
+        void OnLateTick();
         void OnExit();
     }
 }
