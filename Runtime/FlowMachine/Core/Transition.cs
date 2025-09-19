@@ -2,8 +2,11 @@ using System;
 
 namespace NekoFlow
 {
-    public partial class StateMachine
+    public partial class FlowMachine
     {
+        /// <summary>
+        /// Represents a transition from one state to another with a condition.
+        /// </summary>
         private class Transition
         {
             public Func<bool> Condition { get; }
