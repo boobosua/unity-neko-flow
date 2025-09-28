@@ -1,6 +1,6 @@
 using System;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     public partial class FlowMachine
     {

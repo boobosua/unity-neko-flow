@@ -2,7 +2,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     [CustomEditor(typeof(FlowBehaviour), true)]
     public class FlowBehaviourInspector : Editor

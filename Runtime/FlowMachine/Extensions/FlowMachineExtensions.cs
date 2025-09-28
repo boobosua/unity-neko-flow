@@ -1,6 +1,6 @@
 using System;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     public static class FlowMachineExtensions
     {

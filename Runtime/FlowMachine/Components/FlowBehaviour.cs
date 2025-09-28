@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     [DisallowMultipleComponent]
     public abstract class FlowBehaviour : MonoBehaviour
