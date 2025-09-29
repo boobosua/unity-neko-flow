@@ -4,7 +4,9 @@
   "displayName": "NekoFlow",
   "description": "A flexible and simple state machine framework for Unity.",
   "unity": "2020.3",
-  "dependencies": {},
+  "dependencies": {
+    "com.nekoindie.nekounity.lib": "1.9.4"
+  },
   "author": {
     "name": "Nguyen Thanh Trung",
     "url": "https://github.com/boobosua"
