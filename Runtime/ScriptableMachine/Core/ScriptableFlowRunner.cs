@@ -18,6 +18,17 @@ namespace NekoFlow.Scriptable
         private float _enterTime;
         private bool _isTransitioning;
 
+#if UNITY_EDITOR
+        protected virtual void OnValidate()
+        {
+            if (!Context && TryGetComponent<T>(out var ctx))
+            {
+                Context = ctx;
+            }
+        }
+#endif
+
+
         private void Awake()
         {
             if (TryGetComponent<T>(out var ctx))

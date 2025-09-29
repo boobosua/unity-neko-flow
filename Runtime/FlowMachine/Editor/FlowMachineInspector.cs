@@ -7,15 +7,12 @@ namespace NekoFlow.FSM
     [CustomEditor(typeof(FlowBehaviour), true)]
     public class FlowBehaviourInspector : Editor
     {
-        private SerializedProperty _enableFixedTick;
-        private SerializedProperty _enableLateTick;
         private IState _lastState;
         private float _stateStartTime;
 
         private void OnEnable()
         {
-            _enableFixedTick = serializedObject.FindProperty("_enableFixedTick");
-            _enableLateTick = serializedObject.FindProperty("_enableLateTick");
+            // No serialized fields to cache currently
         }
 
         public override void OnInspectorGUI()
@@ -26,7 +23,7 @@ namespace NekoFlow.FSM
             DrawScriptField();
 
             // Draw FlowBehaviour base properties
-            DrawFlowBehaviourSection();
+            // (Removed obsolete options)
 
             // Draw Flow Machine debug info if playing
             if (Application.isPlaying)
@@ -48,11 +45,7 @@ namespace NekoFlow.FSM
             }
         }
 
-        private void DrawFlowBehaviourSection()
-        {
-            EditorGUILayout.PropertyField(_enableFixedTick, new GUIContent("Enable Fixed Tick"));
-            EditorGUILayout.PropertyField(_enableLateTick, new GUIContent("Enable Late Tick"));
-        }
+        // (Removed obsolete DrawFlowBehaviourSection)
 
         private void DrawFlowMachineDebug()
         {
@@ -147,9 +140,7 @@ namespace NekoFlow.FSM
                 enterChildren = false;
 
                 // Skip script reference and FlowBehaviour properties
-                if (iterator.propertyPath == "m_Script" ||
-                    iterator.name == "_enableFixedTick" ||
-                    iterator.name == "_enableLateTick")
+                if (iterator.propertyPath == "m_Script")
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);

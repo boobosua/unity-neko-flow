@@ -5,9 +5,6 @@ namespace NekoFlow.FSM
     [DisallowMultipleComponent]
     public abstract class FlowBehaviour : MonoBehaviour
     {
-        [Header("Flow Settings")]
-        [SerializeField] private bool _enableFixedTick = false;
-        [SerializeField] private bool _enableLateTick = false;
         private readonly FlowMachine _mainFlow = new();
 
         protected virtual void Update()
@@ -17,14 +14,12 @@ namespace NekoFlow.FSM
 
         protected virtual void FixedUpdate()
         {
-            if (_enableFixedTick)
-                _mainFlow?.FixedTick();
+            _mainFlow?.FixedTick();
         }
 
         protected virtual void LateUpdate()
         {
-            if (_enableLateTick)
-                _mainFlow?.LateTick();
+            _mainFlow?.LateTick();
         }
 
         public bool IsInState<T>() where T : IState
