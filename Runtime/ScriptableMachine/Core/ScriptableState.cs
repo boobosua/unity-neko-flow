@@ -7,16 +7,13 @@ namespace NekoFlow.Scriptable
     /// </summary>
     public abstract class ScriptableState<T> : ScriptableObject where T : Component
     {
-        [Header("Behavior")]
         [SerializeField] private ScriptableAction<T>[] _actions = new ScriptableAction<T>[0];
-
-        [Header("Transitions")]
         [SerializeField] private ScriptableTransition<T>[] _transitions = new ScriptableTransition<T>[0];
 
         public bool HasActions => _actions != null && _actions.Length > 0;
         public bool HasTransitions => _transitions != null && _transitions.Length > 0;
 
-        public virtual void Enter(T ctx)
+        public virtual void OnEnter(T ctx)
         {
             var arr = _actions;
             for (int i = 0, n = arr.Length; i < n; i++)
@@ -25,7 +22,7 @@ namespace NekoFlow.Scriptable
             }
         }
 
-        public virtual void Update(T ctx)
+        public virtual void OnUpdate(T ctx)
         {
             var arr = _actions;
             for (int i = 0, n = arr.Length; i < n; i++)
@@ -34,7 +31,7 @@ namespace NekoFlow.Scriptable
             }
         }
 
-        public virtual void FixedUpdate(T ctx)
+        public virtual void OnFixedUpdate(T ctx)
         {
             var arr = _actions;
             for (int i = 0, n = arr.Length; i < n; i++)
@@ -43,7 +40,7 @@ namespace NekoFlow.Scriptable
             }
         }
 
-        public virtual void LateUpdate(T ctx)
+        public virtual void OnLateUpdate(T ctx)
         {
             var arr = _actions;
             for (int i = 0, n = arr.Length; i < n; i++)
@@ -52,7 +49,7 @@ namespace NekoFlow.Scriptable
             }
         }
 
-        public virtual void Exit(T ctx)
+        public virtual void OnExit(T ctx)
         {
             var arr = _actions;
             for (int i = 0, n = arr.Length; i < n; i++)

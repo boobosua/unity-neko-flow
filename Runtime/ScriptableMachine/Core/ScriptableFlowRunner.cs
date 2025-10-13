@@ -1,4 +1,5 @@
 using System;
+using NekoLib.Logger;
 using UnityEngine;
 
 namespace NekoFlow.Scriptable
@@ -21,13 +22,12 @@ namespace NekoFlow.Scriptable
 #if UNITY_EDITOR
         protected virtual void OnValidate()
         {
-            if (!Context && TryGetComponent<T>(out var ctx))
+            if (Context == null && TryGetComponent<T>(out var ctx))
             {
                 Context = ctx;
             }
         }
 #endif
-
 
         private void Awake()
         {
@@ -37,7 +37,7 @@ namespace NekoFlow.Scriptable
             }
             else
             {
-                Debug.LogError($"[{nameof(ScriptableFlowRunner<T>)}] No component of type {typeof(T).Name} found on GameObject '{gameObject.name}'. Disabling the flow runner.", this);
+                Log.Error($"[{nameof(ScriptableFlowRunner<T>)}] No component of type {typeof(T).Name} found on GameObject '{gameObject.name}'. Disabling the flow runner.", this);
             }
         }
 
@@ -50,9 +50,9 @@ namespace NekoFlow.Scriptable
         private void Update()
         {
             var cs = CurrentState; var ctx = Context;
-            if (!cs || !ctx) return;
+            if (cs == null || ctx == null) return;
 
-            if (cs.HasActions) cs.Update(ctx);
+            if (cs.HasActions) cs.OnUpdate(ctx);
 
             if (cs.HasTransitions && !_isTransitioning)
             {
@@ -66,22 +66,22 @@ namespace NekoFlow.Scriptable
         {
             var cs = CurrentState;
             var ctx = Context;
-            if (!cs || !ctx || !cs.HasActions) return;
-            cs.FixedUpdate(ctx);
+            if (cs == null || ctx == null || !cs.HasActions) return;
+            cs.OnFixedUpdate(ctx);
         }
 
         private void LateUpdate()
         {
             var cs = CurrentState;
             var ctx = Context;
-            if (!cs || !ctx || !cs.HasActions) return;
-            cs.LateUpdate(ctx);
+            if (cs == null || ctx == null || !cs.HasActions) return;
+            cs.OnLateUpdate(ctx);
         }
 
         public void ResetFlow(ScriptableState<T> startState = null)
         {
-            if (!Context) return;
-            if (CurrentState) CurrentState.Exit(Context);
+            if (Context == null) return;
+            if (CurrentState != null) CurrentState.OnExit(Context);
             CurrentState = null;
             if (startState != null) _initialState = startState;
             if (_initialState != null) TransitionTo(_initialState);
@@ -89,24 +89,24 @@ namespace NekoFlow.Scriptable
 
         public bool TryTransitionTo(ScriptableState<T> next)
         {
-            if (!next || !Context || _isTransitioning) return false;
+            if (next == null || Context == null || _isTransitioning) return false;
             TransitionTo(next);
             return true;
         }
 
         public void TransitionTo(ScriptableState<T> next)
         {
-            if (!next || !Context) return;
+            if (next == null || Context == null) return;
 
             _isTransitioning = true;
             var prev = CurrentState;
             try
             {
                 if (prev != null)
-                    prev.Exit(Context);
+                    prev.OnExit(Context);
                 CurrentState = next;
                 _enterTime = Time.time;
-                CurrentState.Enter(Context);
+                CurrentState.OnEnter(Context);
                 OnStateChanged?.Invoke(prev, CurrentState);
             }
             finally

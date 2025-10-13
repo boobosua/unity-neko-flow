@@ -1,6 +1,6 @@
 #if UNITY_EDITOR
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 
 namespace NekoFlow.FSM
 {
@@ -10,73 +10,99 @@ namespace NekoFlow.FSM
         private IState _lastState;
         private float _stateStartTime;
 
-        private void OnEnable()
-        {
-            // No serialized fields to cache currently
-        }
-
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
 
-            // Draw script field first (like normal components)
+            // Script field
             DrawScriptField();
 
-            // Draw FlowBehaviour base properties
-            // (Removed obsolete options)
-
-            // Draw Flow Machine debug info if playing
-            if (Application.isPlaying)
-            {
-                DrawFlowMachineDebug();
-            }
+            // Runtime box (visible in Edit & Play)
+            DrawRuntimeBox();
 
             EditorGUILayout.Space();
 
-            // Draw derived class properties
+            // Derived class properties
             DrawDerivedClassProperties();
 
             serializedObject.ApplyModifiedProperties();
 
-            // Force repaint during play mode for real-time updates
+            // Live updates in Play Mode
             if (Application.isPlaying)
-            {
                 Repaint();
-            }
         }
 
         // (Removed obsolete DrawFlowBehaviourSection)
 
-        private void DrawFlowMachineDebug()
+        private void DrawRuntimeBox()
         {
             var flowBehaviour = (FlowBehaviour)target;
             var currentState = flowBehaviour.GetCurrentState();
 
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Flow Machine Debug", EditorStyles.boldLabel);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField("Runtime", EditorStyles.boldLabel);
 
-            EditorGUI.BeginDisabledGroup(true);
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    // Context is the component itself
+                    EditorGUILayout.ObjectField("Context", flowBehaviour as Component, typeof(Component), true);
 
-            // Current State
-            string stateName = currentState != null
-                ? System.Text.RegularExpressions.Regex.Replace(currentState.GetType().Name, "(\\B[A-Z])", " $1")
-                : "None";
-            EditorGUILayout.TextField("Current State", stateName);
+                    // Current State name (text only; not a UnityEngine.Object)
+                    string stateName = currentState != null
+                        ? System.Text.RegularExpressions.Regex.Replace(currentState.GetType().Name, "(\\B[A-Z])", " $1")
+                        : "None";
+                    EditorGUILayout.TextField("Current State", stateName);
 
-            // Time in current state (moved above transitions)
-            string timeInState = GetTimeInCurrentState(currentState);
-            EditorGUILayout.TextField("Time", timeInState);
+                    // Time In State as integer seconds (0 when not applicable)
+                    int seconds = GetTimeInCurrentStateSeconds(currentState);
+                    EditorGUILayout.TextField("Time In State", $"{seconds}s");
+                }
 
-            // Potential Transitions in Unity list style
-            DrawPotentialTransitionsAsArray(flowBehaviour);
+                // In Play Mode, list potential transitions with Jump buttons
+                if (Application.isPlaying)
+                {
+                    var flowMachine = flowBehaviour.GetFlowMachine();
+                    if (flowMachine != null)
+                    {
+                        var potentialStates = flowMachine.GetPotentialTransitions();
+                        if (potentialStates != null && potentialStates.Count > 0)
+                        {
+                            EditorGUILayout.Space(4);
+                            EditorGUILayout.LabelField("Available Transitions", EditorStyles.boldLabel);
 
-            EditorGUI.EndDisabledGroup();
+                            for (int i = 0; i < potentialStates.Count; i++)
+                            {
+                                var to = potentialStates[i];
+                                string toName = to != null
+                                    ? System.Text.RegularExpressions.Regex.Replace(to.GetType().Name, "(\\B[A-Z])", " $1")
+                                    : "None";
+
+                                using (new EditorGUILayout.HorizontalScope())
+                                {
+                                    using (new EditorGUI.DisabledScope(true))
+                                    {
+                                        EditorGUILayout.TextField(toName);
+                                    }
+                                    using (new EditorGUI.DisabledScope(to == null))
+                                    {
+                                        if (GUILayout.Button("Jump", GUILayout.Width(60)))
+                                        {
+                                            flowMachine.SetState(to);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        private string GetTimeInCurrentState(IState currentState)
+        private int GetTimeInCurrentStateSeconds(IState currentState)
         {
-            if (currentState == null)
-                return "0.00s";
+            if (!Application.isPlaying || currentState == null)
+                return 0;
 
             // Track state changes
             if (_lastState != currentState)
@@ -86,37 +112,10 @@ namespace NekoFlow.FSM
             }
 
             float timeInState = (float)EditorApplication.timeSinceStartup - _stateStartTime;
-            return $"{timeInState:F2}s";
+            return Mathf.FloorToInt(timeInState);
         }
 
-        private void DrawPotentialTransitionsAsArray(FlowBehaviour flowBehaviour)
-        {
-            var flowMachine = flowBehaviour.GetFlowMachine();
-            if (flowMachine == null)
-            {
-                EditorGUILayout.LabelField("Transitions", "None");
-                return;
-            }
-
-            var potentialStates = flowMachine.GetPotentialTransitions();
-
-            // Draw array-style header with size
-            var headerRect = EditorGUILayout.GetControlRect();
-            EditorGUI.LabelField(new Rect(headerRect.x, headerRect.y, EditorGUIUtility.labelWidth, headerRect.height),
-                $"Transitions ({potentialStates.Count})");
-
-            if (potentialStates.Count == 0)
-                return;
-
-            // Draw each transition as array element
-            EditorGUI.indentLevel++;
-            for (int i = 0; i < potentialStates.Count; i++)
-            {
-                string stateName = System.Text.RegularExpressions.Regex.Replace(potentialStates[i].GetType().Name, "(\\B[A-Z])", " $1");
-                EditorGUILayout.TextField($"Element {i}", stateName);
-            }
-            EditorGUI.indentLevel--;
-        }
+        // Removed old array-style transitions list in favor of the Runtime box above
 
         private void DrawScriptField()
         {

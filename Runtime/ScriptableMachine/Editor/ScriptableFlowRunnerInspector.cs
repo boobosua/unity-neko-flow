@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using UnityEditor;
+using UnityEditor.Callbacks;
 using UnityEngine;
 
 namespace NekoFlow.Scriptable.Editor
@@ -19,7 +20,6 @@ namespace NekoFlow.Scriptable.Editor
         string _actionName = "New Action";
         string _conditionName = "New Condition";
 
-        bool _assignAsInitial = false;          // default: false
         bool _openScriptAfterCreate = true;
 
         // Folder paths (strings; folder-only via Browse)
@@ -29,8 +29,9 @@ namespace NekoFlow.Scriptable.Editor
         Type _controllerType;                 // T in ScriptableFlowRunner<T>
         string _controllerTypeName;             // EnemyController, NPCController, ...
 
-        const string BaseScriptsRoot = "Assets/Plugins/NekoFlow/Scriptables/Scripts";
-        const string BaseAssetsRoot = "Assets/Plugins/NekoFlow/Scriptables/Resources";
+        // Use non-firstpass folders so generated scripts can reference user types (e.g., Enemy in Assembly-CSharp)
+        const string BaseScriptsRoot = "Assets/NekoFlow/Scriptables/Scripts";   // Fallback when context script folder not found
+        const string BaseAssetsRoot = "Assets/NekoFlow/Scriptables/Resources";  // Fallback when context script folder not found
 
         void OnEnable()
         {
@@ -38,9 +39,20 @@ namespace NekoFlow.Scriptable.Editor
             _controllerType = ResolveControllerTypeFromRunner(target.GetType());
             _controllerTypeName = _controllerType != null ? _controllerType.Name : "Controller";
 
-            // Default roots
-            _scriptsRootPath = EnsureFolderPath($"{BaseScriptsRoot}/{_controllerTypeName}");
-            _assetsRootPath = EnsureFolderPath($"{BaseAssetsRoot}/{_controllerTypeName}");
+            // Default roots: under the context (controller) script folder
+            // e.g., <ContextFolder>/Scriptable and <ContextFolder>/Scriptable/Resources
+            var ctxFolder = FindScriptFolderOfType(_controllerType);
+            if (!string.IsNullOrEmpty(ctxFolder))
+            {
+                _scriptsRootPath = EnsureFolderPath($"{ctxFolder}/Scriptable");
+                _assetsRootPath = EnsureFolderPath($"{ctxFolder}/Scriptable/Resources");
+            }
+            else
+            {
+                // Fallback: project-level defaults
+                _scriptsRootPath = EnsureFolderPath($"{BaseScriptsRoot}/{_controllerTypeName}");
+                _assetsRootPath = EnsureFolderPath($"{BaseAssetsRoot}/{_controllerTypeName}");
+            }
         }
 
         public override void OnInspectorGUI()
@@ -143,16 +155,25 @@ namespace NekoFlow.Scriptable.Editor
                 _scriptsRootPath = FolderField("Scripts Root", _scriptsRootPath, $"{BaseScriptsRoot}/{_controllerTypeName}");
                 _assetsRootPath = FolderField("Assets Root (Resources)", _assetsRootPath, $"{BaseAssetsRoot}/{_controllerTypeName}");
 
-                _assignAsInitial = EditorGUILayout.ToggleLeft("Assign as Initial State", _assignAsInitial);
+                // Warn when selecting a first-pass folder where user types (Assembly-CSharp) are not visible
+                if (IsFirstPassFolder(_scriptsRootPath))
+                {
+                    EditorGUILayout.HelpBox(
+                        "Selected Scripts Root is under a first-pass folder (Plugins/Standard Assets). " +
+                        "Scripts there cannot reference regular project types like your Enemy MonoBehaviour. " +
+                        "Choose a folder outside those special directories (e.g., Assets/NekoFlow/...).",
+                        MessageType.Warning);
+                }
+
                 _openScriptAfterCreate = EditorGUILayout.ToggleLeft("Open Script After Create", _openScriptAfterCreate);
 
                 var nameCore = StripSuffixes(Sanitize(_stateName), "State"); // avoid *StateState
-                var className = $"{_controllerTypeName}_{nameCore}State";
+                var className = $"{_controllerTypeName}{nameCore}State"; // no underscore
 
                 var scriptsDir = _scriptsRootPath;
                 var assetsDir = _assetsRootPath;
-                var scriptPath = Combine(scriptsDir, $"{className}.cs");
-                var assetPath = Combine(assetsDir, $"{className}.asset");
+                var scriptPath = Combine(scriptsDir, $"States/{className}.cs");
+                var assetPath = Combine(assetsDir, $"States/{className}.asset");
 
                 var valid = ValidateNewTypePaths(className, scriptPath, assetPath, out var reason);
                 bool playLock = EditorApplication.isPlayingOrWillChangePlaymode;
@@ -183,9 +204,16 @@ namespace NekoFlow.Scriptable.Editor
                 _actionName = EditorGUILayout.TextField("Action Class Name", _actionName);
 
                 var nameCore = StripSuffixes(Sanitize(_actionName), "Action"); // avoid *ActionAction
-                var className = $"{_controllerTypeName}_{nameCore}";
+                var className = $"{_controllerTypeName}{nameCore}"; // no underscore
                 var scriptPath = Combine(_scriptsRootPath, $"Actions/{className}.cs");
                 var assetPath = Combine(_assetsRootPath, $"Actions/{className}.asset");
+
+                if (IsFirstPassFolder(_scriptsRootPath))
+                {
+                    EditorGUILayout.HelpBox(
+                        "Scripts Root is under a first-pass folder. Generated Actions may fail to compile if they reference regular project types.",
+                        MessageType.Warning);
+                }
 
                 var valid = ValidateNewTypePaths(className, scriptPath, assetPath, out var reason);
                 bool playLock = EditorApplication.isPlayingOrWillChangePlaymode;
@@ -216,9 +244,16 @@ namespace NekoFlow.Scriptable.Editor
                 _conditionName = EditorGUILayout.TextField("Condition Class Name", _conditionName);
 
                 var nameCore = StripSuffixes(Sanitize(_conditionName), "Condition"); // avoid *ConditionCondition
-                var className = $"{_controllerTypeName}_{nameCore}";
+                var className = $"{_controllerTypeName}{nameCore}"; // no underscore
                 var scriptPath = Combine(_scriptsRootPath, $"Conditions/{className}.cs");
                 var assetPath = Combine(_assetsRootPath, $"Conditions/{className}.asset");
+
+                if (IsFirstPassFolder(_scriptsRootPath))
+                {
+                    EditorGUILayout.HelpBox(
+                        "Scripts Root is under a first-pass folder. Generated Conditions may fail to compile if they reference regular project types.",
+                        MessageType.Warning);
+                }
 
                 var valid = ValidateNewTypePaths(className, scriptPath, assetPath, out var reason);
                 bool playLock = EditorApplication.isPlayingOrWillChangePlaymode;
@@ -247,31 +282,36 @@ namespace NekoFlow.Scriptable.Editor
             File.WriteAllText(scriptPath, EmitStateScript(className, _controllerType), Encoding.UTF8);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
 
-            var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
-            var type = mono?.GetClass();
-            if (!IsValidStateTypeForRunner(type, _controllerType))
+            CreateAssetWhenCompiled(() =>
             {
-                EditorUtility.DisplayDialog("Compile / Type Check",
-                    "Unity hasn’t compiled the new script yet, or it doesn’t derive from the correct ScriptableState<T>.",
-                    "OK");
-                return;
-            }
+                var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+                var type = mono?.GetClass();
+                if (!IsValidStateTypeForRunner(type, _controllerType))
+                    return false;
 
-            var so = ScriptableObject.CreateInstance(type);
-            AssetDatabase.CreateAsset(so, assetPath);
-            AssetDatabase.SaveAssets();
+                var so = CreateInstance(type);
+                AssetDatabase.CreateAsset(so, assetPath);
+                AssetDatabase.SaveAssets();
 
-            if (_assignAsInitial && _initialStateProp != null)
+                EditorGUIUtility.PingObject(so);
+                Selection.activeObject = so;
+                if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                return true;
+            },
+            onTimeout: () =>
             {
-                Undo.RecordObject(target as UnityEngine.Object, "Assign Initial State");
-                _initialStateProp.objectReferenceValue = so;
-                serializedObject.ApplyModifiedProperties();
-                EditorUtility.SetDirty(target as UnityEngine.Object);
-            }
-
-            EditorGUIUtility.PingObject(so);
-            Selection.activeObject = so;
-            if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                // If we timed out likely due to domain reload or slow compile; enqueue for post-reload processing
+                CreationQueue.Enqueue(new CreationQueue.Request
+                {
+                    scriptPath = scriptPath,
+                    assetPath = assetPath,
+                    openGenericName = "ScriptableState`1",
+                    controllerTypeAqn = _controllerType?.AssemblyQualifiedName,
+                    openScript = _openScriptAfterCreate,
+                    targetGlobalId = null,
+                    initialProp = null
+                });
+            });
         }
 
         void CreateAction(string className, string scriptPath, string assetPath)
@@ -281,23 +321,35 @@ namespace NekoFlow.Scriptable.Editor
             File.WriteAllText(scriptPath, EmitActionScript(className, _controllerType), Encoding.UTF8);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
 
-            var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
-            var type = mono?.GetClass();
-            if (!IsValidTyped(type, "ScriptableAction`1", _controllerType))
+            CreateAssetWhenCompiled(() =>
             {
-                EditorUtility.DisplayDialog("Compile / Type Check",
-                    "Unity hasn’t compiled the new script yet, or it doesn’t derive from ScriptableAction<T> for this runner’s T.",
-                    "OK");
-                return;
-            }
+                var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+                var type = mono?.GetClass();
+                if (!IsValidTyped(type, "ScriptableAction`1", _controllerType))
+                    return false;
 
-            var so = ScriptableObject.CreateInstance(type);
-            AssetDatabase.CreateAsset(so, assetPath);
-            AssetDatabase.SaveAssets();
+                var so = CreateInstance(type);
+                AssetDatabase.CreateAsset(so, assetPath);
+                AssetDatabase.SaveAssets();
 
-            EditorGUIUtility.PingObject(so);
-            Selection.activeObject = so;
-            if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                EditorGUIUtility.PingObject(so);
+                Selection.activeObject = so;
+                if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                return true;
+            },
+            onTimeout: () =>
+            {
+                CreationQueue.Enqueue(new CreationQueue.Request
+                {
+                    scriptPath = scriptPath,
+                    assetPath = assetPath,
+                    openGenericName = "ScriptableAction`1",
+                    controllerTypeAqn = _controllerType?.AssemblyQualifiedName,
+                    openScript = _openScriptAfterCreate,
+                    targetGlobalId = null,
+                    initialProp = null
+                });
+            });
         }
 
         void CreateCondition(string className, string scriptPath, string assetPath)
@@ -307,23 +359,35 @@ namespace NekoFlow.Scriptable.Editor
             File.WriteAllText(scriptPath, EmitConditionScript(className, _controllerType), Encoding.UTF8);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
 
-            var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
-            var type = mono?.GetClass();
-            if (!IsValidTyped(type, "ScriptableCondition`1", _controllerType))
+            CreateAssetWhenCompiled(() =>
             {
-                EditorUtility.DisplayDialog("Compile / Type Check",
-                    "Unity hasn’t compiled the new script yet, or it doesn’t derive from ScriptableCondition<T> for this runner’s T.",
-                    "OK");
-                return;
-            }
+                var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+                var type = mono?.GetClass();
+                if (!IsValidTyped(type, "ScriptableCondition`1", _controllerType))
+                    return false;
 
-            var so = ScriptableObject.CreateInstance(type);
-            AssetDatabase.CreateAsset(so, assetPath);
-            AssetDatabase.SaveAssets();
+                var so = CreateInstance(type);
+                AssetDatabase.CreateAsset(so, assetPath);
+                AssetDatabase.SaveAssets();
 
-            EditorGUIUtility.PingObject(so);
-            Selection.activeObject = so;
-            if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                EditorGUIUtility.PingObject(so);
+                Selection.activeObject = so;
+                if (_openScriptAfterCreate && mono) AssetDatabase.OpenAsset(mono);
+                return true;
+            },
+            onTimeout: () =>
+            {
+                CreationQueue.Enqueue(new CreationQueue.Request
+                {
+                    scriptPath = scriptPath,
+                    assetPath = assetPath,
+                    openGenericName = "ScriptableCondition`1",
+                    controllerTypeAqn = _controllerType?.AssemblyQualifiedName,
+                    openScript = _openScriptAfterCreate,
+                    targetGlobalId = null,
+                    initialProp = null
+                });
+            });
         }
 
         // -------------------- Helpers --------------------
@@ -423,6 +487,15 @@ namespace NekoFlow.Scriptable.Editor
             if (clash != null && clash.Length > 0) { reason = $"A class named '{className}' already exists in the project."; return false; }
 
             return true;
+        }
+
+        static bool IsFirstPassFolder(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            var p = path.Replace("\\", "/");
+            return p.StartsWith("Assets/Plugins/") || p.Equals("Assets/Plugins")
+                || p.StartsWith("Assets/Standard Assets/") || p.Equals("Assets/Standard Assets")
+                || p.StartsWith("Assets/Pro Standard Assets/") || p.Equals("Assets/Pro Standard Assets");
         }
 
         static Type ResolveControllerTypeFromRunner(Type t)
@@ -536,6 +609,160 @@ namespace NekoFlow.Scriptable.Editor
 
         static string Combine(string folder, string file) =>
             (folder.EndsWith("/") ? folder : folder + "/") + file;
+
+        // Resolve the folder (Assets-relative) where the controller type's script file lives
+        static string FindScriptFolderOfType(Type t)
+        {
+            if (t == null) return null;
+            var guids = AssetDatabase.FindAssets("t:MonoScript " + t.Name);
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var ms = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                if (ms != null && ms.GetClass() == t)
+                {
+                    return Path.GetDirectoryName(path).Replace("\\", "/");
+                }
+            }
+            return null;
+        }
+
+        // Wait across editor frames for Unity to compile and the new class to resolve, then run creation.
+        // Returns immediately; calls onTimeout if class does not resolve within maxAttempts frames.
+        void CreateAssetWhenCompiled(Func<bool> tryCreate, int attempt = 0, int maxAttempts = 60, Action onTimeout = null)
+        {
+            // If the editor is compiling (or about to), defer to post-reload queue for reliability
+            if (EditorApplication.isCompiling)
+            {
+                onTimeout?.Invoke();
+                return;
+            }
+            // If creation succeeds (type resolved and asset created), stop.
+            if (tryCreate()) return;
+
+            // Otherwise, schedule another attempt on next editor frame until timeout.
+            if (attempt >= maxAttempts)
+            {
+                onTimeout?.Invoke();
+                return;
+            }
+            EditorApplication.delayCall += () => CreateAssetWhenCompiled(tryCreate, attempt + 1, maxAttempts, onTimeout);
+        }
+
+        // Persistent queue processed after scripts reload to finish creating assets reliably
+        static class CreationQueue
+        {
+            [Serializable]
+            public class Request
+            {
+                public string scriptPath;
+                public string assetPath;
+                public string openGenericName; // ScriptableState`1, ScriptableAction`1, ScriptableCondition`1
+                public string controllerTypeAqn;
+                public bool openScript;
+                public string targetGlobalId; // for assigning initial state
+                public string initialProp;     // usually _initialState
+            }
+
+            [Serializable]
+            class RequestList { public System.Collections.Generic.List<Request> items = new System.Collections.Generic.List<Request>(); }
+
+            const string Key = "NekoFlow_Scriptable_CreateQueue";
+
+            static RequestList Load()
+            {
+                var json = EditorPrefs.GetString(Key, null);
+                var data = new RequestList();
+                if (!string.IsNullOrEmpty(json))
+                {
+                    try { JsonUtility.FromJsonOverwrite(json, data); } catch { data = new RequestList(); }
+                }
+                return data;
+            }
+
+            static void Save(RequestList list)
+            {
+                var json = JsonUtility.ToJson(list);
+                EditorPrefs.SetString(Key, json);
+            }
+
+            public static void Enqueue(Request req)
+            {
+                var list = Load();
+                list.items.Add(req);
+                Save(list);
+            }
+
+            public static string ToGlobalIdString(UnityEngine.Object obj)
+            {
+                if (!obj) return null;
+                var gid = GlobalObjectId.GetGlobalObjectIdSlow(obj);
+                return gid.ToString();
+            }
+
+            public static UnityEngine.Object FromGlobalIdString(string s)
+            {
+                if (string.IsNullOrEmpty(s)) return null;
+                if (GlobalObjectId.TryParse(s, out var gid))
+                    return GlobalObjectId.GlobalObjectIdentifierToObjectSlow(gid);
+                return null;
+            }
+
+            [DidReloadScripts]
+            static void OnScriptsReloaded()
+            {
+                EditorApplication.delayCall += ProcessQueue;
+
+                static void ProcessQueue()
+                {
+                    var list = Load();
+                    if (list.items.Count == 0) return;
+
+                    var remaining = new RequestList();
+                    bool began = false;
+                    try
+                    {
+                        AssetDatabase.StartAssetEditing();
+                        began = true;
+
+                        foreach (var r in list.items)
+                        {
+                            var mono = AssetDatabase.LoadAssetAtPath<MonoScript>(r.scriptPath);
+                            var type = mono != null ? mono.GetClass() : null;
+                            var ctrlType = !string.IsNullOrEmpty(r.controllerTypeAqn) ? Type.GetType(r.controllerTypeAqn) : null;
+                            bool ok = type != null && InheritsGeneric(type, r.openGenericName, ctrlType);
+                            if (!ok)
+                            {
+                                // Keep it for next processing
+                                remaining.items.Add(r);
+                                continue;
+                            }
+
+                            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(r.assetPath) == null)
+                            {
+                                EnsureDirs(r.scriptPath, r.assetPath);
+                                var so = ScriptableObject.CreateInstance(type);
+                                AssetDatabase.CreateAsset(so, r.assetPath);
+
+                                if (r.openScript && mono)
+                                {
+                                    // Schedule opening the script after asset operations to keep UI responsive
+                                    var m = mono; // capture
+                                    EditorApplication.delayCall += () => AssetDatabase.OpenAsset(m);
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (began) AssetDatabase.StopAssetEditing();
+                        AssetDatabase.SaveAssets();
+                    }
+
+                    Save(remaining);
+                }
+            }
+        }
     }
 }
 #endif

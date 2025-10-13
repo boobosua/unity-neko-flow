@@ -5,7 +5,7 @@
   "description": "A flexible and simple state machine framework for Unity.",
   "unity": "2020.3",
   "dependencies": {
-    "com.nekoindie.nekounity.lib": "1.9.4"
+    "com.nekoindie.nekounity.lib": "1.9.8"
   },
   "author": {
     "name": "Nguyen Thanh Trung",
