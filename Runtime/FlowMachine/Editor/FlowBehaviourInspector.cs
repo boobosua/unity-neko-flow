@@ -2,37 +2,63 @@
 using UnityEditor;
 using UnityEngine;
 
+#if ODIN_INSPECTOR
+using Sirenix.OdinInspector.Editor;
+#endif
+
 namespace NekoFlow.FSM
 {
     [CustomEditor(typeof(FlowBehaviour), true)]
-    public class FlowBehaviourInspector : Editor
+    public class FlowBehaviourInspector :
+#if ODIN_INSPECTOR
+        OdinEditor          // Use Odin when available
+#else
+        Editor              // Fallback to normal Unity inspector
+#endif
     {
         private IState _lastState;
         private float _stateStartTime;
 
         public override void OnInspectorGUI()
         {
-            serializedObject.Update();
+#if ODIN_INSPECTOR
+            // --- ODIN VERSION ---
+            // Odin handles the serializedObject life cycle internally,
+            // so don't wrap base.OnInspectorGUI() in Update/Apply.
 
-            // Script field
+            // Optional: if you DON'T want the default script field Odin shows,
+            // you can comment this out.
             DrawScriptField();
 
-            // Runtime box (visible in Edit & Play)
+            // Your runtime debug box (same for both Odin / non-Odin)
             DrawRuntimeBox();
 
             EditorGUILayout.Space();
 
-            // Derived class properties
+            // Let Odin draw all fields with attributes, groups, etc.
+            base.OnInspectorGUI();
+
+            if (Application.isPlaying)
+                Repaint();
+
+#else
+            // --- NON-ODIN VERSION ---
+            serializedObject.Update();
+
+            DrawScriptField();
+            DrawRuntimeBox();
+
+            EditorGUILayout.Space();
+
+            // Old behaviour: manually draw all other properties
             DrawDerivedClassProperties();
 
             serializedObject.ApplyModifiedProperties();
 
-            // Live updates in Play Mode
             if (Application.isPlaying)
                 Repaint();
+#endif
         }
-
-        // (Removed obsolete DrawFlowBehaviourSection)
 
         private void DrawRuntimeBox()
         {
@@ -46,12 +72,15 @@ namespace NekoFlow.FSM
                 using (new EditorGUI.DisabledScope(true))
                 {
                     // Context is the component itself
-                    EditorGUILayout.ObjectField("Context", flowBehaviour as Component, typeof(Component), true);
+                    EditorGUILayout.ObjectField("Context",
+                        flowBehaviour as Component, typeof(Component), true);
 
                     // Current State name (text only; not a UnityEngine.Object)
                     string stateName = currentState != null
-                        ? System.Text.RegularExpressions.Regex.Replace(currentState.GetType().Name, "(\\B[A-Z])", " $1")
+                        ? System.Text.RegularExpressions.Regex.Replace(
+                            currentState.GetType().Name, "(\\B[A-Z])", " $1")
                         : "None";
+
                     EditorGUILayout.TextField("Current State", stateName);
 
                     // Time In State as integer seconds (0 when not applicable)
@@ -69,13 +98,15 @@ namespace NekoFlow.FSM
                         if (potentialStates != null && potentialStates.Count > 0)
                         {
                             EditorGUILayout.Space(4);
-                            EditorGUILayout.LabelField("Available Transitions", EditorStyles.boldLabel);
+                            EditorGUILayout.LabelField(
+                                "Available Transitions", EditorStyles.boldLabel);
 
                             for (int i = 0; i < potentialStates.Count; i++)
                             {
                                 var to = potentialStates[i];
                                 string toName = to != null
-                                    ? System.Text.RegularExpressions.Regex.Replace(to.GetType().Name, "(\\B[A-Z])", " $1")
+                                    ? System.Text.RegularExpressions.Regex.Replace(
+                                        to.GetType().Name, "(\\B[A-Z])", " $1")
                                     : "None";
 
                                 using (new EditorGUILayout.HorizontalScope())
@@ -84,6 +115,7 @@ namespace NekoFlow.FSM
                                     {
                                         EditorGUILayout.TextField(toName);
                                     }
+
                                     using (new EditorGUI.DisabledScope(to == null))
                                     {
                                         if (GUILayout.Button("Jump", GUILayout.Width(60)))
@@ -115,8 +147,6 @@ namespace NekoFlow.FSM
             return Mathf.FloorToInt(timeInState);
         }
 
-        // Removed old array-style transitions list in favor of the Runtime box above
-
         private void DrawScriptField()
         {
             SerializedProperty script = serializedObject.FindProperty("m_Script");
@@ -128,6 +158,8 @@ namespace NekoFlow.FSM
             }
         }
 
+#if !ODIN_INSPECTOR
+        // Only used in non-Odin mode
         private void DrawDerivedClassProperties()
         {
             // Draw all other properties except FlowBehaviour base class properties
@@ -138,13 +170,14 @@ namespace NekoFlow.FSM
             {
                 enterChildren = false;
 
-                // Skip script reference and FlowBehaviour properties
+                // Skip script reference
                 if (iterator.propertyPath == "m_Script")
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);
             }
         }
+#endif
     }
 }
 #endif
