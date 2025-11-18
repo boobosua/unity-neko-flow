@@ -28,7 +28,7 @@ namespace NekoFlow.FSM
 
             // Optional: if you DON'T want the default script field Odin shows,
             // you can comment this out.
-            DrawScriptField();
+            // DrawScriptField();
 
             // Your runtime debug box (same for both Odin / non-Odin)
             DrawRuntimeBox();
