@@ -60,8 +60,8 @@ public class EnemyController : StateBehaviour
         _nextIdleDuration = Random.Range(idleDurationRange.x, idleDurationRange.y);
         _nextPatrolDuration = Random.Range(patrolDurationRange.x, patrolDurationRange.y);
 
-        this
-            .StartWith(_idle)
+        this.StartWith(_idle)
+
             // Time-based transitions using built-in TimeInState
             .At(_idle, _patrol, () => GetTimeInCurrentState() >= _nextIdleDuration)
             .At(_patrol, _idle, () => GetTimeInCurrentState() >= _nextPatrolDuration)
@@ -111,7 +111,7 @@ public sealed class EnemyIdleState : BaseState<EnemyController>
 }
 ```
 
-## Pure C# usage (no MonoBehaviour)
+## Use the StateMachine class directly
 
 If you don’t want a component, use `StateMachine` directly:
 
@@ -127,17 +127,20 @@ public class EnemyBrain : MonoBehaviour
 
     private void Awake()
     {
+        // Create state machine.
         _sm = new StateMachine();
 
+        // Create states.
         _idle = new IdleState();
         _patrol = new PatrolState();
 
-        _sm
-            .StartWith(_idle)
+        // Declare transitions.
+        _sm.StartWith(_idle)
             .At(_idle, _patrol, () => _sm.TimeInState >= 1.0f)
             .At(_patrol, _idle, () => _sm.TimeInState >= 3.0f);
     }
 
+    // Remember to tick the state machine in Update.
     private void Update()
     {
         _sm?.Tick(Time.deltaTime);
