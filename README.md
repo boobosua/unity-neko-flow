@@ -1,144 +1,216 @@
 # NekoFlow
 
-Simple finite state machine for Unity with fluent API.
+Lightweight state machine + small conditional flow helpers for Unity.
 
-## Installation
+## Installation (Unity Package Manager)
 
-Via Git URL in Unity Package Manager:
+1. Install NekoLib:
+
+```
+https://github.com/boobosua/unity-nekolib.git
+```
+
+2. Install NekoFlow:
 
 ```
 https://github.com/boobosua/unity-neko-flow.git
 ```
 
-## Usage
+## Quick start (state machine)
 
-### 1. Create Enemy Controller
+### 1) Create a controller (the “brain”)
 
-```csharp
-using NekoFlow;
-
-public class EnemyController : FlowBehaviour
-{
-    [SerializeField] private float moveSpeed = 3f;
-    [SerializeField] private float patrolRadius = 5f;
-    [SerializeField] private float jumpChance = 0.3f;
-
-    public float MoveSpeed => moveSpeed;
-    public float PatrolRadius => patrolRadius;
-    public Vector3 StartPosition { get; private set; }
-
-    private EnemyIdleState _idleState;
-    private EnemyPatrolState _patrolState;
-    private EnemyJumpState _jumpState;
-
-    private void Awake()
-    {
-        StartPosition = transform.position;
-
-        _idleState = new EnemyIdleState(this);
-        _patrolState = new EnemyPatrolState(this);
-        _jumpState = new EnemyJumpState(this);
-
-        MainFlow.StartWith(_idleState)
-            .At(_idleState, _patrolState, () => _idleState.IsComplete)
-            .At(_patrolState, _idleState, () => _patrolState.IsComplete)
-            .At(_patrolState, _jumpState, () => ShouldJump())
-            .At(_jumpState, _idleState, () => _jumpState.IsComplete);
-    }
-
-    private bool ShouldJump()
-    {
-        return _patrolState.IsMoving && Random.Range(0f, 1f) < jumpChance * Time.deltaTime;
-    }
-}
-```
-
-### 2. Create States
-
-**States/EnemyIdleState.cs**
-
-```csharp
-using NekoFlow;
-
-public class EnemyIdleState : BaseState<EnemyController>
-{
-    private float _idleTimer;
-    private float _idleDuration;
-
-    public bool IsComplete => _idleTimer >= _idleDuration;
-
-    public EnemyIdleState(EnemyController context) : base(context) { }
-
-    public override void OnEnter()
-    {
-        _idleTimer = 0f;
-        _idleDuration = Random.Range(1f, 3f);
-    }
-
-    public override void OnTick()
-    {
-        _idleTimer += Time.deltaTime;
-    }
-}
-```
-
-**States/EnemyPatrolState.cs**
+Derive from `StateBehaviour`, create your states, then declare transitions.
+Transition predicates usually belong here (using `GetTimeInCurrentState()`, sensors, cooldowns, etc.).
 
 ```csharp
 using NekoFlow;
 using UnityEngine;
 
-public class EnemyPatrolState : BaseState<EnemyController>
+public class EnemyController : StateBehaviour
 {
-    private Vector3 _targetPosition;
-    private float _patrolTimer;
-    private float _patrolDuration;
+    [Header("Movement")]
+    [SerializeField] private float moveSpeed = 3f;
+    [SerializeField] private float patrolRadius = 5f;
 
-    public bool IsComplete => _patrolTimer >= _patrolDuration;
-    public bool IsMoving => Vector3.Distance(_transform.position, _targetPosition) > 0.1f;
+    [Header("State Durations")]
+    [SerializeField] private Vector2 idleDurationRange = new(0.8f, 2.0f);
+    [SerializeField] private Vector2 patrolDurationRange = new(2.0f, 5.0f);
+    [SerializeField] private float attackDuration = 0.7f;
 
-    public EnemyPatrolState(EnemyController context) : base(context) { }
+    public float MoveSpeed => moveSpeed;
+    public float PatrolRadius => patrolRadius;
+    public Vector3 StartPosition { get; private set; }
 
-    public override void OnEnter()
+    private EnemyIdleState _idle;
+    private EnemyPatrolState _patrol;
+    private EnemyAttackState _attack;
+
+    private float _nextIdleDuration;
+    private float _nextPatrolDuration;
+
+    private void Awake()
     {
-        _patrolTimer = 0f;
-        _patrolDuration = Random.Range(3f, 6f);
+        StartPosition = transform.position;
 
-        // Set random patrol target
-        Vector2 randomDir = Random.insideUnitCircle.normalized;
-        _targetPosition = _context.StartPosition + (Vector3)randomDir * _context.PatrolRadius;
+        _idle = new EnemyIdleState(this);
+        _patrol = new EnemyPatrolState(this);
+        _attack = new EnemyAttackState(this);
+
+        _nextIdleDuration = Random.Range(idleDurationRange.x, idleDurationRange.y);
+        _nextPatrolDuration = Random.Range(patrolDurationRange.x, patrolDurationRange.y);
+
+        this
+            .StartWith(_idle)
+            // Time-based transitions using built-in TimeInState
+            .At(_idle, _patrol, () => GetTimeInCurrentState() >= _nextIdleDuration)
+            .At(_patrol, _idle, () => GetTimeInCurrentState() >= _nextPatrolDuration)
+
+            // Global transition that can interrupt from ANY state
+            .Any(_attack, () => CanAttackNow())
+
+            // Controller decides when attack finishes
+            .At(_attack, _idle, () => GetTimeInCurrentState() >= attackDuration);
     }
 
-    public override void OnTick()
+    private bool CanAttackNow()
     {
-        _patrolTimer += Time.deltaTime;
+        // Replace with your own logic: target detected, in range, cooldown, etc.
+        return HasTargetInRange();
+    }
 
-        // Move to target
-        _transform.position = Vector3.MoveTowards(
-            _transform.position,
-            _targetPosition,
-            _context.MoveSpeed * Time.deltaTime
-        );
+    private bool HasTargetInRange()
+    {
+        // Demo stub
+        return false;
     }
 }
 ```
 
-## API
+### 2) Create states (the “workers”)
 
-### FlowBehaviour
+Implement `IState` directly, or inherit `BaseState<TContext>`.
 
-- `MainFlow` - Access the state machine
-- `IsInState<T>()` - Check current state type
-- `GetCurrentState()` - Get current state instance
+```csharp
+using NekoFlow;
+using UnityEngine;
 
-### FlowMachine
+public sealed class EnemyIdleState : BaseState<EnemyController>
+{
+    public EnemyIdleState(EnemyController context) : base(context) { }
 
-- `StartWith(state)` - Set initial state
-- `At(from, to, condition)` - Add transition
-- `Any(to, condition)` - Add global transition
+    public override void OnEnter()
+    {
+        // e.g. set animation, stop nav, etc.
+    }
 
-### BaseState<T>
+    public override void OnTick(float deltaTime)
+    {
+        // Idle behavior only (no transition logic here)
+    }
+}
+```
 
-- `OnEnter()` - Called when entering state
-- `OnTick()` - Called every frame
-- `OnExit()` - Called when leaving state
+## Pure C# usage (no MonoBehaviour)
+
+If you don’t want a component, use `StateMachine` directly:
+
+```csharp
+using NekoFlow;
+using UnityEngine;
+
+public class EnemyBrain : MonoBehaviour
+{
+    private StateMachine _sm;
+    private  IdleState _idle;
+    private  PatrolState _patrol;
+
+    private void Awake()
+    {
+        _sm = new StateMachine();
+
+        _idle = new IdleState();
+        _patrol = new PatrolState();
+
+        _sm
+            .StartWith(_idle)
+            .At(_idle, _patrol, () => _sm.TimeInState >= 1.0f)
+            .At(_patrol, _idle, () => _sm.TimeInState >= 3.0f);
+    }
+
+    private void Update()
+    {
+        _sm?.Tick(Time.deltaTime);
+    }
+}
+```
+
+## Conditional flows
+
+These are standalone helpers (not tied to the state machine).
+
+### SimpleFlow
+
+Run one action when a predicate is true; optionally run another action when it’s false.
+
+```csharp
+using NekoFlow;
+using UnityEngine;
+
+var flow = new SimpleFlow(
+    predicate: () => Time.timeScale > 0,
+    onSuccess: () => Debug.Log("Running"),
+    onFailure: () => Debug.Log("Paused")
+);
+
+bool didRun = flow.Execute();
+```
+
+### BranchFlow
+
+Try branches in order; execute the first match; optionally execute a fallback.
+
+```csharp
+using NekoFlow;
+using UnityEngine;
+
+var flow = new BranchFlow()
+    .When(() => Input.GetKey(KeyCode.Space), () => Debug.Log("Jump"))
+    .When(() => Input.GetKey(KeyCode.LeftArrow), () => Debug.Log("Left"))
+    .Otherwise(() => Debug.Log("Idle"));
+
+flow.Execute();
+```
+
+## API (quick reference)
+
+### StateBehaviour
+
+- `IsInState<T>()` — check current state type
+- `TryGetCurrentState<T>(out T state)` — get current state instance (typed)
+- `GetTimeInCurrentState()` — seconds spent in current state
+
+### StateMachine (pure C#)
+
+- `Tick(deltaTime)` — evaluate transitions, tick current state, track `TimeInState`
+- `SetState(state)` — immediately switch state (`OnExit` → `OnEnter`)
+- `TimeInState` — accumulated seconds since entering current state
+
+### Fluent transition extensions
+
+Available on both `StateBehaviour` and `StateMachine`:
+
+- `StartWith(state)`
+- `At(from, to, condition)`
+- `Any(to, condition)` (checked before state-specific transitions)
+
+### IState / BaseState<T>
+
+- `OnEnter()`
+- `OnTick(float deltaTime)`
+- `OnExit()`
+
+## Requirements
+
+- Unity 2020.3+
+- NekoLib

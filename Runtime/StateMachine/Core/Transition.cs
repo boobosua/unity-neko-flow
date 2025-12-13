@@ -1,8 +1,8 @@
 using System;
 
-namespace NekoFlow.FSM
+namespace NekoFlow
 {
-    public partial class FlowMachine
+    public sealed partial class StateMachine
     {
         /// <summary>
         /// Represents a transition from one state to another with a condition.

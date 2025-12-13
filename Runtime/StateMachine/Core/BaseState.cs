@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace NekoFlow.FSM
+namespace NekoFlow
 {
     public class BaseState<T> : IState where T : MonoBehaviour
     {
@@ -16,9 +16,7 @@ namespace NekoFlow.FSM
         }
 
         public virtual void OnEnter() { }
-        public virtual void OnTick() { }
-        public virtual void OnFixedTick() { }
-        public virtual void OnLateTick() { }
+        public virtual void OnTick(float deltaTime) { }
         public virtual void OnExit() { }
     }
 }

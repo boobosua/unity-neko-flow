@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,18 +8,24 @@ using UnityEngine;
 using Sirenix.OdinInspector.Editor;
 #endif
 
-namespace NekoFlow.FSM
+namespace NekoFlow
 {
-    [CustomEditor(typeof(FlowBehaviour), true)]
-    public class FlowBehaviourInspector :
+    [CustomEditor(typeof(StateBehaviour), true)]
+    public class StateBehaviourInspector :
 #if ODIN_INSPECTOR
         OdinEditor          // Use Odin when available
 #else
         Editor              // Fallback to normal Unity inspector
 #endif
     {
+        private const string RuntimeFoldoutStateKeyPrefix = "NekoFlow.StateBehaviourInspector.RuntimeFoldout";
+
+        private static GUIStyle _runtimeBoxStyle;
+
         private IState _lastState;
         private float _stateStartTime;
+        private readonly List<IState> _transitionsBuffer = new(8);
+        private readonly Dictionary<System.Type, string> _typeNameCache = new(8);
 
         public override void OnInspectorGUI()
         {
@@ -30,8 +38,7 @@ namespace NekoFlow.FSM
             // you can comment this out.
             // DrawScriptField();
 
-            // Your runtime debug box (same for both Odin / non-Odin)
-            DrawRuntimeBox();
+            DrawRuntimeFoldout();
 
             EditorGUILayout.Space();
 
@@ -46,7 +53,7 @@ namespace NekoFlow.FSM
             serializedObject.Update();
 
             DrawScriptField();
-            DrawRuntimeBox();
+            DrawRuntimeFoldout();
 
             EditorGUILayout.Space();
 
@@ -60,54 +67,86 @@ namespace NekoFlow.FSM
 #endif
         }
 
+        private void DrawRuntimeFoldout()
+        {
+            bool expanded = SessionState.GetBool(GetRuntimeFoldoutStateKey(), true);
+            bool expandedBefore = expanded;
+            expanded = EditorGUILayout.BeginFoldoutHeaderGroup(expanded, "State Machine Runtime");
+            if (expanded != expandedBefore)
+                SessionState.SetBool(GetRuntimeFoldoutStateKey(), expanded);
+
+            if (expanded)
+            {
+                DrawRuntimeBox();
+            }
+
+            EditorGUILayout.EndFoldoutHeaderGroup();
+        }
+
+        private string GetRuntimeFoldoutStateKey()
+        {
+            // Match Unity's typical inspector behavior: state is per-object, editor-only, and not serialized into scenes/prefabs.
+            // We keep it project-local (Library) via SessionState.
+#if UNITY_2020_2_OR_NEWER
+            GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(target);
+            return $"{RuntimeFoldoutStateKeyPrefix}.{globalId}";
+#else
+            return $"{RuntimeFoldoutStateKeyPrefix}.{target.GetInstanceID()}";
+#endif
+        }
+
+        private static GUIStyle GetRuntimeBoxStyle()
+        {
+            if (_runtimeBoxStyle != null)
+                return _runtimeBoxStyle;
+
+            _runtimeBoxStyle = new GUIStyle(EditorStyles.helpBox)
+            {
+                padding = new RectOffset(
+                    EditorStyles.helpBox.padding.left + 6,
+                    EditorStyles.helpBox.padding.right + 6,
+                    EditorStyles.helpBox.padding.top + 4,
+                    EditorStyles.helpBox.padding.bottom + 4)
+            };
+            return _runtimeBoxStyle;
+        }
+
         private void DrawRuntimeBox()
         {
-            var flowBehaviour = (FlowBehaviour)target;
-            var currentState = flowBehaviour.GetCurrentState();
+            var stateBehaviour = (StateBehaviour)target;
+            var currentState = stateBehaviour.GetCurrentState();
 
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.VerticalScope(GetRuntimeBoxStyle()))
             {
-                EditorGUILayout.LabelField("Runtime", EditorStyles.boldLabel);
-
+                EditorGUILayout.Space(2);
                 using (new EditorGUI.DisabledScope(true))
                 {
-                    // Context is the component itself
-                    EditorGUILayout.ObjectField("Context",
-                        flowBehaviour as Component, typeof(Component), true);
-
                     // Current State name (text only; not a UnityEngine.Object)
-                    string stateName = currentState != null
-                        ? System.Text.RegularExpressions.Regex.Replace(
-                            currentState.GetType().Name, "(\\B[A-Z])", " $1")
-                        : "None";
-
+                    string stateName = GetPrettyTypeName(currentState?.GetType());
                     EditorGUILayout.TextField("Current State", stateName);
 
                     // Time In State as integer seconds (0 when not applicable)
-                    int seconds = GetTimeInCurrentStateSeconds(currentState);
+                    int seconds = GetTimeInCurrentStateSeconds(currentState, stateBehaviour);
                     EditorGUILayout.TextField("Time In State", $"{seconds}s");
                 }
 
                 // In Play Mode, list potential transitions with Jump buttons
                 if (Application.isPlaying)
                 {
-                    var flowMachine = flowBehaviour.GetFlowMachine();
-                    if (flowMachine != null)
+                    var stateMachine = stateBehaviour.GetStateMachine();
+                    if (stateMachine != null)
                     {
-                        var potentialStates = flowMachine.GetPotentialTransitions();
-                        if (potentialStates != null && potentialStates.Count > 0)
+                        stateMachine.GetPotentialTransitionsNonAlloc(_transitionsBuffer);
+                        if (_transitionsBuffer.Count > 0)
                         {
                             EditorGUILayout.Space(4);
                             EditorGUILayout.LabelField(
                                 "Available Transitions", EditorStyles.boldLabel);
 
-                            for (int i = 0; i < potentialStates.Count; i++)
+                            for (int i = 0; i < _transitionsBuffer.Count; i++)
                             {
-                                var to = potentialStates[i];
-                                string toName = to != null
-                                    ? System.Text.RegularExpressions.Regex.Replace(
-                                        to.GetType().Name, "(\\B[A-Z])", " $1")
-                                    : "None";
+                                var to = _transitionsBuffer[i];
+                                string toName = GetPrettyTypeName(to?.GetType());
 
                                 using (new EditorGUILayout.HorizontalScope())
                                 {
@@ -120,7 +159,7 @@ namespace NekoFlow.FSM
                                     {
                                         if (GUILayout.Button("Jump", GUILayout.Width(60)))
                                         {
-                                            flowMachine.SetState(to);
+                                            stateMachine.SetState(to);
                                         }
                                     }
                                 }
@@ -128,21 +167,39 @@ namespace NekoFlow.FSM
                         }
                     }
                 }
+
+                EditorGUILayout.Space(2);
             }
         }
 
-        private int GetTimeInCurrentStateSeconds(IState currentState)
+        private string GetPrettyTypeName(System.Type type)
+        {
+            if (type == null) return "None";
+            if (_typeNameCache.TryGetValue(type, out var cached))
+                return cached;
+            string pretty = Regex.Replace(type.Name, "(\\B[A-Z])", " $1");
+            _typeNameCache[type] = pretty;
+            return pretty;
+        }
+
+        private int GetTimeInCurrentStateSeconds(IState currentState, StateBehaviour component)
         {
             if (!Application.isPlaying || currentState == null)
                 return 0;
 
-            // Track state changes
+            // Prefer runtime-tracked time from the FSM when available
+            var sm = component != null ? component.GetStateMachine() : null;
+            if (sm != null)
+            {
+                return Mathf.FloorToInt(sm.TimeInState);
+            }
+
+            // Fallback to editor timer if FSM not available
             if (_lastState != currentState)
             {
                 _lastState = currentState;
                 _stateStartTime = (float)EditorApplication.timeSinceStartup;
             }
-
             float timeInState = (float)EditorApplication.timeSinceStartup - _stateStartTime;
             return Mathf.FloorToInt(timeInState);
         }
