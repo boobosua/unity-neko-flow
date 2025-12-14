@@ -1,6 +1,6 @@
 using System;
 
-namespace NekoFlow
+namespace NekoFlow.Conditional
 {
     /// <summary>
     /// A simple conditional flow that executes one of two actions based on a predicate.

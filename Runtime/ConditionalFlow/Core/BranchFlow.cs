@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace NekoFlow
+namespace NekoFlow.Conditional
 {
     /// <summary>
     /// A conditional flow that evaluates multiple branches in order and executes the first matching action.

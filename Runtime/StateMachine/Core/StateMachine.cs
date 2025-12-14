@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     public sealed partial class StateMachine
     {

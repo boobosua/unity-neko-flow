@@ -8,7 +8,7 @@ using UnityEngine;
 using Sirenix.OdinInspector.Editor;
 #endif
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     [CustomEditor(typeof(StateBehaviour), true)]
     public class StateBehaviourInspector :

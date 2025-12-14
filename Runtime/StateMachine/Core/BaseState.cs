@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace NekoFlow
+namespace NekoFlow.FSM
 {
     public class BaseState<T> : IState where T : MonoBehaviour
     {
