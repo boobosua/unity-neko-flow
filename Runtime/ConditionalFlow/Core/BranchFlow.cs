@@ -46,7 +46,7 @@ namespace NekoFlow.Conditional
         // <summary>
         /// Execute the branch flow, evaluating each branch in order and executing the first matching action.
         /// </summary>
-        public bool Execute()
+        public FlowResult Execute()
         {
             for (int i = 0; i < _branches.Count; i++)
             {
@@ -54,20 +54,20 @@ namespace NekoFlow.Conditional
                 if (b.Predicate())
                 {
                     b.Action();
-                    return true;
+                    return FlowResult.Matched;
                 }
             }
 
             if (_fallback != null)
             {
                 _fallback();
-                return true;
+                return FlowResult.Fallback;
             }
 
-            return false;
+            return FlowResult.None;
         }
 
-        // <summary>
+        /// <summary>
         /// Clear all branches and the fallback action.
         /// </summary>
         public BranchFlow Clear()
@@ -76,5 +76,12 @@ namespace NekoFlow.Conditional
             _fallback = null;
             return this;
         }
+    }
+
+    public enum FlowResult
+    {
+        None = 0,
+        Matched = 1,
+        Fallback = 2,
     }
 }

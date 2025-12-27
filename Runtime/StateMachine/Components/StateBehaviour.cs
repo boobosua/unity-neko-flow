@@ -1,9 +1,17 @@
 using UnityEngine;
 
+#if ODIN_INSPECTOR
+using Sirenix.OdinInspector;
+#endif
+
 namespace NekoFlow.FSM
 {
     [DisallowMultipleComponent]
+#if ODIN_INSPECTOR
+    public abstract class StateBehaviour : SerializedMonoBehaviour
+#else
     public abstract class StateBehaviour : MonoBehaviour
+#endif
     {
         private readonly StateMachine _stateMachine = new();
 

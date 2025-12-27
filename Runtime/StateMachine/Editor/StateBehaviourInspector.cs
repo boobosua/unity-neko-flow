@@ -30,14 +30,7 @@ namespace NekoFlow.FSM
         public override void OnInspectorGUI()
         {
 #if ODIN_INSPECTOR
-            // --- ODIN VERSION ---
-            // Odin handles the serializedObject life cycle internally,
-            // so don't wrap base.OnInspectorGUI() in Update/Apply.
-
-            // Optional: if you DON'T want the default script field Odin shows,
-            // you can comment this out.
             // DrawScriptField();
-
             DrawRuntimeFoldout();
 
             EditorGUILayout.Space();
@@ -49,7 +42,6 @@ namespace NekoFlow.FSM
                 Repaint();
 
 #else
-            // --- NON-ODIN VERSION ---
             serializedObject.Update();
 
             DrawScriptField();
