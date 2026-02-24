@@ -1,10 +1,12 @@
 {
-    "name": "NekoFlow",
+    "name": "NekoFlow.Editor",
     "rootNamespace": "NekoFlow",
     "references": [
-        "GUID:22a704979ba6f464ea6e8bb476cdcc2b"
+        "GUID:704dfe0a49f1ab14899a865f65e3dc9e"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
