@@ -215,5 +215,5 @@ Available on both `StateBehaviour` and `StateMachine`:
 
 ## Requirements
 
-- Unity 2020.3+
+- Unity 6+
 - NekoLib
