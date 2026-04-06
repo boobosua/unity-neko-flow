@@ -24,7 +24,7 @@ Derive from `StateBehaviour`, create your states, then declare transitions.
 Transition predicates usually belong here (using `GetTimeInCurrentState()`, sensors, cooldowns, etc.).
 
 ```csharp
-using NekoFlow;
+using NekoFlow.FSM;
 using UnityEngine;
 
 public class EnemyController : StateBehaviour
@@ -89,10 +89,10 @@ public class EnemyController : StateBehaviour
 
 ### 2) Create states (the “workers”)
 
-Implement `IState` directly, or inherit `BaseState<TContext>`.
+Implement `IState` directly, or inherit `BaseState<TContext>`. `BaseState<T>` stores three protected fields for convenience: `_context` (the controller), `_gameObject`, and `_transform`.
 
 ```csharp
-using NekoFlow;
+using NekoFlow.FSM;
 using UnityEngine;
 
 public sealed class EnemyIdleState : BaseState<EnemyController>
@@ -116,7 +116,7 @@ public sealed class EnemyIdleState : BaseState<EnemyController>
 If you don’t want a component, use `StateMachine` directly:
 
 ```csharp
-using NekoFlow;
+using NekoFlow.FSM;
 using UnityEngine;
 
 public class EnemyBrain : MonoBehaviour
@@ -150,14 +150,14 @@ public class EnemyBrain : MonoBehaviour
 
 ## Conditional flows
 
-These are standalone helpers (not tied to the state machine).
+These are standalone helpers (not tied to the state machine). Import `NekoFlow.Conditional` for both.
 
 ### SimpleFlow
 
-Run one action when a predicate is true; optionally run another action when it’s false.
+Run one action when a predicate is true; optionally run another action when it's false.
 
 ```csharp
-using NekoFlow;
+using NekoFlow.Conditional;
 using UnityEngine;
 
 var flow = new SimpleFlow(
@@ -171,10 +171,10 @@ bool didRun = flow.Execute();
 
 ### BranchFlow
 
-Try branches in order; execute the first match; optionally execute a fallback.
+Try branches in order; execute the first match; optionally execute a fallback. Returns a `FlowResult` enum.
 
 ```csharp
-using NekoFlow;
+using NekoFlow.Conditional;
 using UnityEngine;
 
 var flow = new BranchFlow()
@@ -182,7 +182,16 @@ var flow = new BranchFlow()
     .When(() => Input.GetKey(KeyCode.LeftArrow), () => Debug.Log("Left"))
     .Otherwise(() => Debug.Log("Idle"));
 
-flow.Execute();
+FlowResult result = flow.Execute();
+// FlowResult.Matched  — a When() branch ran
+// FlowResult.Fallback — Otherwise() ran
+// FlowResult.None     — nothing matched and no fallback
+```
+
+A flow can be re-used by registering new branches after clearing it:
+
+```csharp
+flow.Clear(); // removes all When() branches and the Otherwise() fallback
 ```
 
 ## API (quick reference)
@@ -197,21 +206,33 @@ flow.Execute();
 
 - `Tick(deltaTime)` — evaluate transitions, tick current state, track `TimeInState`
 - `SetState(state)` — immediately switch state (`OnExit` → `OnEnter`)
+- `CurrentState` — currently active `IState`
 - `TimeInState` — accumulated seconds since entering current state
+- Extension — `Is<T>()` — returns `true` when `CurrentState` is of type `T`
+- Extension — `Get<T>()` — returns `CurrentState` cast to `T`, or `null`
 
 ### Fluent transition extensions
 
 Available on both `StateBehaviour` and `StateMachine`:
 
-- `StartWith(state)`
-- `At(from, to, condition)`
-- `Any(to, condition)` (checked before state-specific transitions)
+- `StartWith(state)` — set initial state
+- `At(from, to, condition)` — register a state-specific transition
+- `Any(to, condition)` — register an any-state transition (evaluated before state-specific ones)
 
 ### IState / BaseState<T>
 
 - `OnEnter()`
 - `OnTick(float deltaTime)`
 - `OnExit()`
+- `BaseState<T>` provides `_context`, `_gameObject`, `_transform` as protected fields
+
+### Conditional flows
+
+| Type | Key members |
+|------|-------------|
+| `SimpleFlow` | `Execute()` → `bool` (true if predicate matched) |
+| `BranchFlow` | `When(pred, action)`, `Otherwise(action)`, `Execute()` → `FlowResult`, `Clear()` |
+| `FlowResult` | `None = 0`, `Matched = 1`, `Fallback = 2` |
 
 ## Requirements
 

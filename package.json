@@ -1,6 +1,6 @@
 {
   "name": "com.nekoindie.nekounity.flow",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "displayName": "Neko Flow",
   "description": "A flexible and simple state machine framework for Unity.",
   "unity": "2020.3",
