@@ -20,17 +20,24 @@ namespace NekoFlow.FSM
     {
         private const string RuntimeFoldoutStateKeyPrefix = "NekoFlow.StateBehaviourInspector.RuntimeFoldout";
 
+        // Invalidated when the editor skin changes (e.g. Light ↔ Dark mode switch).
+        private static GUISkin _lastSkin;
         private static GUIStyle _runtimeBoxStyle;
 
-        private IState _lastState;
-        private float _stateStartTime;
+        private string _foldoutStateKey;
         private readonly List<IState> _transitionsBuffer = new(8);
         private readonly Dictionary<System.Type, string> _typeNameCache = new(8);
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            // Cache once per inspector instance — target is valid from OnEnable onward.
+            _foldoutStateKey = ComputeFoldoutStateKey();
+        }
 
         public override void OnInspectorGUI()
         {
 #if ODIN_INSPECTOR
-            // DrawScriptField();
             DrawRuntimeFoldout();
 
             EditorGUILayout.Space();
@@ -61,11 +68,11 @@ namespace NekoFlow.FSM
 
         private void DrawRuntimeFoldout()
         {
-            bool expanded = SessionState.GetBool(GetRuntimeFoldoutStateKey(), true);
+            bool expanded = SessionState.GetBool(_foldoutStateKey, true);
             bool expandedBefore = expanded;
             expanded = EditorGUILayout.BeginFoldoutHeaderGroup(expanded, "State Machine Runtime");
             if (expanded != expandedBefore)
-                SessionState.SetBool(GetRuntimeFoldoutStateKey(), expanded);
+                SessionState.SetBool(_foldoutStateKey, expanded);
 
             if (expanded)
             {
@@ -75,10 +82,9 @@ namespace NekoFlow.FSM
             EditorGUILayout.EndFoldoutHeaderGroup();
         }
 
-        private string GetRuntimeFoldoutStateKey()
+        private string ComputeFoldoutStateKey()
         {
-            // Match Unity's typical inspector behavior: state is per-object, editor-only, and not serialized into scenes/prefabs.
-            // We keep it project-local (Library) via SessionState.
+            // State is per-object, editor-only, and kept in Library (not serialized into scenes/prefabs).
 #if UNITY_2020_2_OR_NEWER
             GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(target);
             return $"{RuntimeFoldoutStateKeyPrefix}.{globalId}";
@@ -89,9 +95,11 @@ namespace NekoFlow.FSM
 
         private static GUIStyle GetRuntimeBoxStyle()
         {
-            if (_runtimeBoxStyle != null)
+            // Recreate the style whenever the editor skin changes (e.g. Light ↔ Dark mode).
+            if (_runtimeBoxStyle != null && GUI.skin == _lastSkin)
                 return _runtimeBoxStyle;
 
+            _lastSkin = GUI.skin;
             _runtimeBoxStyle = new GUIStyle(EditorStyles.helpBox)
             {
                 padding = new RectOffset(
@@ -174,26 +182,12 @@ namespace NekoFlow.FSM
             return pretty;
         }
 
-        private int GetTimeInCurrentStateSeconds(IState currentState, StateBehaviour component)
+        private static int GetTimeInCurrentStateSeconds(IState currentState, StateBehaviour component)
         {
             if (!Application.isPlaying || currentState == null)
                 return 0;
 
-            // Prefer runtime-tracked time from the FSM when available
-            var sm = component != null ? component.GetStateMachine() : null;
-            if (sm != null)
-            {
-                return Mathf.FloorToInt(sm.TimeInState);
-            }
-
-            // Fallback to editor timer if FSM not available
-            if (_lastState != currentState)
-            {
-                _lastState = currentState;
-                _stateStartTime = (float)EditorApplication.timeSinceStartup;
-            }
-            float timeInState = (float)EditorApplication.timeSinceStartup - _stateStartTime;
-            return Mathf.FloorToInt(timeInState);
+            return Mathf.FloorToInt(component.GetStateMachine().TimeInState);
         }
 
         private void DrawScriptField()

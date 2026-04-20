@@ -4,10 +4,16 @@ namespace NekoFlow.FSM
 {
     public class BaseState<T> : IState where T : MonoBehaviour
     {
-        protected T _context;
-        protected GameObject _gameObject;
-        protected Transform _transform;
+        protected readonly T _context;
+        protected readonly GameObject _gameObject;
+        protected readonly Transform _transform;
 
+        /// <param name="context">
+        /// The MonoBehaviour this state operates on. References to <c>gameObject</c> and
+        /// <c>transform</c> are cached at construction time. If the component is destroyed while
+        /// the state machine is still running, guard with <c>_context == null</c> before accessing
+        /// any Unity objects.
+        /// </param>
         public BaseState(T context)
         {
             _context = context;

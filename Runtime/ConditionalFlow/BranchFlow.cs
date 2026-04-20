@@ -8,7 +8,7 @@ namespace NekoFlow.Conditional
     /// </summary>
     public sealed class BranchFlow
     {
-        public const int DefaultCapacity = 8;
+        private const int DefaultCapacity = 8;
 
         private readonly struct Branch
         {
@@ -43,7 +43,7 @@ namespace NekoFlow.Conditional
             return this;
         }
 
-        // <summary>
+        /// <summary>
         /// Execute the branch flow, evaluating each branch in order and executing the first matching action.
         /// </summary>
         public FlowResult Execute()
@@ -76,12 +76,5 @@ namespace NekoFlow.Conditional
             _fallback = null;
             return this;
         }
-    }
-
-    public enum FlowResult
-    {
-        None = 0,
-        Matched = 1,
-        Fallback = 2,
     }
 }

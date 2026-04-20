@@ -19,17 +19,26 @@ namespace NekoFlow.FSM
 
         /// <summary>
         /// Update the state machine with an explicit delta time, accumulating time spent in the current state.
+        /// Ordering per frame:
+        ///   1. Accumulate <paramref name="deltaTime"/> into <see cref="TimeInState"/> so transition
+        ///      conditions always see an up-to-date value.
+        ///   2. Evaluate transitions. If one fires, call <see cref="SetState"/> and return — the new
+        ///      state's first <see cref="IState.OnTick"/> will run next frame.
+        ///   3. Otherwise call <see cref="IState.OnTick"/> on the current state.
         /// </summary>
         public void Tick(float deltaTime)
         {
-            var transition = GetTransition();
-            if (transition != null)
-                SetState(transition.To);
-
-            _currentState?.OnTick(deltaTime);
-
             if (_currentState != null)
                 _timeInState += deltaTime;
+
+            var transition = GetTransition();
+            if (transition != null)
+            {
+                SetState(transition.To);
+                return;
+            }
+
+            _currentState?.OnTick(deltaTime);
         }
 
         /// <summary>
@@ -53,6 +62,9 @@ namespace NekoFlow.FSM
 
         /// <summary>
         /// Add a transition from one state to another with a condition.
+        /// Transitions are keyed by the runtime type of <paramref name="from"/>. Two different
+        /// instances of the same class share the same transition list, so each state type should
+        /// have at most one instance registered per machine.
         /// </summary>
         public void AddTransition(IState from, IState to, Func<bool> predicate)
         {
@@ -84,6 +96,8 @@ namespace NekoFlow.FSM
 
         /// <summary>
         /// Get the transition to the next state based on the current state and any active conditions.
+        /// Any-state transitions are always evaluated before state-specific transitions;
+        /// the first matching transition wins.
         /// </summary>
         private Transition GetTransition()
         {

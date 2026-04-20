@@ -15,6 +15,10 @@ namespace NekoFlow.FSM
     {
         private readonly StateMachine _stateMachine = new();
 
+        /// <summary>
+        /// Ticks the state machine each frame. Subclasses that override this method
+        /// must call <c>base.Update()</c>, otherwise the state machine will stop running.
+        /// </summary>
         protected virtual void Update()
         {
             _stateMachine.Tick(Time.deltaTime);
