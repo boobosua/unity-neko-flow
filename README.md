@@ -148,52 +148,6 @@ public class EnemyBrain : MonoBehaviour
 }
 ```
 
-## Conditional flows
-
-These are standalone helpers (not tied to the state machine). Import `NekoFlow.Conditional` for both.
-
-### SimpleFlow
-
-Run one action when a predicate is true; optionally run another action when it's false.
-
-```csharp
-using NekoFlow.Conditional;
-using UnityEngine;
-
-var flow = new SimpleFlow(
-    predicate: () => Time.timeScale > 0,
-    onSuccess: () => Debug.Log("Running"),
-    onFailure: () => Debug.Log("Paused")
-);
-
-bool didRun = flow.Execute();
-```
-
-### BranchFlow
-
-Try branches in order; execute the first match; optionally execute a fallback. Returns a `FlowResult` enum.
-
-```csharp
-using NekoFlow.Conditional;
-using UnityEngine;
-
-var flow = new BranchFlow()
-    .When(() => Input.GetKey(KeyCode.Space), () => Debug.Log("Jump"))
-    .When(() => Input.GetKey(KeyCode.LeftArrow), () => Debug.Log("Left"))
-    .Otherwise(() => Debug.Log("Idle"));
-
-FlowResult result = flow.Execute();
-// FlowResult.Matched  — a When() branch ran
-// FlowResult.Fallback — Otherwise() ran
-// FlowResult.None     — nothing matched and no fallback
-```
-
-A flow can be re-used by registering new branches after clearing it:
-
-```csharp
-flow.Clear(); // removes all When() branches and the Otherwise() fallback
-```
-
 ## API (quick reference)
 
 ### StateBehaviour
@@ -225,14 +179,6 @@ Available on both `StateBehaviour` and `StateMachine`:
 - `OnTick(float deltaTime)`
 - `OnExit()`
 - `BaseState<T>` provides `_context`, `_gameObject`, `_transform` as protected fields
-
-### Conditional flows
-
-| Type | Key members |
-|------|-------------|
-| `SimpleFlow` | `Execute()` → `bool` (true if predicate matched) |
-| `BranchFlow` | `When(pred, action)`, `Otherwise(action)`, `Execute()` → `FlowResult`, `Clear()` |
-| `FlowResult` | `None = 0`, `Matched = 1`, `Fallback = 2` |
 
 ## Requirements
 

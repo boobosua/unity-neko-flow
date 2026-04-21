@@ -11,7 +11,7 @@ using Sirenix.OdinInspector.Editor;
 namespace NekoFlow.FSM
 {
     [CustomEditor(typeof(StateBehaviour), true)]
-    public class StateBehaviourInspector :
+    internal class StateBehaviourInspector :
 #if ODIN_INSPECTOR
         OdinEditor          // Use Odin when available
 #else
