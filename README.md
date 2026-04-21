@@ -1,6 +1,6 @@
 # Neko Flow
 
-Lightweight state machine + small conditional flow helpers for Unity.
+Lightweight state machine for Unity.
 
 ## Installation (Unity Package Manager)
 
