@@ -1,4 +1,4 @@
-# NekoFlow
+# Neko Flow
 
 Lightweight state machine + small conditional flow helpers for Unity.
 
