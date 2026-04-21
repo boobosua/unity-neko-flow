@@ -1,3 +1,10 @@
+## [2.1.2] - 2026-04-21
+
+### Remove 2 Conditional Flows
+
+- Remove SimpleFlow and BranchFlow
+- Fixed transition leaving 1 frame on tick.
+
 ## [2.0.0] - 2025-12-14
 
 ### State Machine & Flow Behaviour
